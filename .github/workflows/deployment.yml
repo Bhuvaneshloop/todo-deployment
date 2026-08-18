@@ -1,0 +1,42 @@
+name: Deploy Todo Application
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Copy bootstrap script from GitHub to EC2
+      - name: Copy bootstrap script to EC2
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "start.sh"
+          target: "/home/ubuntu/"
+          
+      - name: Deploy application on EC2
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+
+          script: |
+            set -e
+
+            echo "======================================"
+            echo "Starting Todo Application Deployment"
+            echo "======================================"
+
+            echo "Making bootstrap script executable..."
+            chmod +x /home/ubuntu/start.sh
+
+            echo "Running bootstrap script..."
+            /home/ubuntu/start.sh
+
+            echo "Checking deployment repository..."
