@@ -8,7 +8,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
+      - name: Check deployment files
+        run: |
+             pwd
+             ls -la
+             test -f bootstrap.sh
       # 1. Copy bootstrap script from GitHub to EC2
       - name: Copy bootstrap script to EC2
         uses: appleboy/scp-action@v1.0.0
