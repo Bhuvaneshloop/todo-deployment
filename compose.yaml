@@ -16,7 +16,7 @@ services:
      networks:
        - todo-network
   todo-app:
-     image: bhuvanesh2003/todo-app:v1
+     image: bhuvanesh2003/todo-app:latest
      container_name: todo-app
      restart: unless-stopped
      ports:
@@ -30,7 +30,7 @@ services:
      networks:
        - todo-network
   todo-ui:
-     image: bhuvanesh2003/todo-ui:v1
+     image: bhuvanesh2003/todo-ui:latest
      container_name: todo-ui
      restart: unless-stopped
      ports:
