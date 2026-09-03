@@ -2,6 +2,19 @@ name: Deploy Todo Application
 
 on:
   workflow_dispatch:
+    inputs:
+      BACKEND_TAG:
+        description: 'ENTER THE BACKEND TAG'
+        required: true
+        default: latest
+        type: string
+      UI_TAG:
+        description: 'ENTER THE UI TAG'
+        required: true
+        default: latest
+        type: string
+
+        
 
 jobs:
   deploy:
@@ -39,6 +52,12 @@ jobs:
             echo "======================================"
             echo "Starting Todo Application Deployment"
             echo "======================================"
+
+            sed -i "s+BACKEND_TAG=latest+BACKEND_TAG=${{ inputs.BACKEND_TAG }}+g" .env
+            sed -i "s+UI_TAG=latest+UI_TAG=${{ inputs.UI_TAG }}+g" .env
+
+            echo "${{ inputs.BACKEND_TAG }}"
+            echo "${{ inputs.UI_TAG }}"
 
             echo "Making bootstrap script executable..."
             chmod +x /home/ubuntu/start.sh
