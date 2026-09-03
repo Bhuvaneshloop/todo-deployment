@@ -53,8 +53,8 @@ jobs:
             echo "Starting Todo Application Deployment"
             echo "======================================"
 
-            sed -i "s+^BACKEND_TAG=.*+BACKEND_TAG=${{ inputs.BACKEND_TAG }}+" /home/ubuntu/todo-deployment/.env
-            sed -i "s+^UI_TAG=.*+UI_TAG=${{ inputs.UI_TAG }}+" /home/ubuntu/todo-deployment/.env
+            sed -i "s+^BACKEND_TAG=.*+BACKEND_TAG=${{ inputs.BACKEND_TAG }}+" /home/ubuntu/todo-deployment/.env.example
+            sed -i "s+^UI_TAG=.*+UI_TAG=${{ inputs.UI_TAG }}+" /home/ubuntu/todo-deployment/.env.example
 
             echo "${{ inputs.BACKEND_TAG }}"
             echo "${{ inputs.UI_TAG }}"
