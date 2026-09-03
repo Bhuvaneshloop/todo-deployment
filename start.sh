@@ -105,17 +105,11 @@ clone_repository() {
 
 prepare_env() {
 
-    if [[ ! -f ".env" ]]; then
-
         cp .env.example .env
 
         log INFO ".env created."
 
-    else
-
-        log INFO ".env already exists."
-
-    fi
+   
 }
 
 #######################################
