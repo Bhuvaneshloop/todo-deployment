@@ -1,0 +1,26 @@
+name: ssm-login
+
+on: workflow_dispatch
+
+permissions: 
+  id-token: write
+  contents: read
+
+jobs:
+  ssm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: aws credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::109684670986:role/Actions-role
+          aws-region: ap-south-1
+      - name: Test EC2 through SSM
+        run: |
+            aws ssm send-command \
+              --instance-ids "i-0ef3723e1f90886fd" \
+              --document-name "AWS-RunShellScript" \
+              --parameters 'commands=["hostname", "whoami"]'
+        
+    
