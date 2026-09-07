@@ -2,7 +2,7 @@ name: ssm-login
 
 on: workflow_dispatch
 
-permissions: 
+permissions:
   id-token: write
   contents: read
 
@@ -11,11 +11,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
+      - name: Show OIDC claims
+        run: |
+          TOKEN=$(curl -s \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+            | jq -r '.value')
+
+          echo "$TOKEN" | cut -d '.' -f2 | base64 -d 2>/dev/null | jq '{
+            iss,
+            sub,
+            aud,
+            repository,
+            repository_owner,
+            ref
+          }'
+
       - name: aws credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::109684670986:role/Actions-role
           aws-region: ap-south-1
+
       - name: Send command to EC2
         run: |
           COMMAND_ID=$(aws ssm send-command \
@@ -32,5 +50,3 @@ jobs:
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
             --instance-id "i-0ef3723e1f90886fd"
-        
-    
