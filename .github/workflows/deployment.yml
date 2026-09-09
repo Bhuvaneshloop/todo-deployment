@@ -19,50 +19,79 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
-      - name: checking out the project
-        uses: actions/checkout@v4
 
-      - name: Check deployment files
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::109684670986:role/GitHubActionsSSM
+          aws-region: ap-south-1
+
+      - name: Verify AWS identity
         run: |
-          pwd
-          ls -la
-          test -f start.sh
+          aws sts get-caller-identity
 
-      # Copy bootstrap script from GitHub to EC2
-      - name: Copy bootstrap script to EC2
-        uses: appleboy/scp-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "start.sh"
-          target: "/home/ubuntu/"
+      - name: Deploy application through SSM
+        run: |
 
-      - name: Deploy application on EC2
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          echo "======================================"
+          echo "Starting Todo Application Deployment"
+          echo "======================================"
 
-          script: |
-            set -e
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids i-0ef3723e1f90886fd \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=[
+              "curl -fsSL -o /home/ubuntu/start.sh https://raw.githubusercontent.com/Bhuvaneshloop/todo-deployment/main/start.sh",
+              "chmod +x /home/ubuntu/start.sh",
+              "BACKEND_TAG=${{ inputs.BACKEND_TAG }} UI_TAG=${{ inputs.UI_TAG }} bash /home/ubuntu/start.sh"
+            ]' \
+            --query "Command.CommandId" \
+            --output text)
 
-            echo "======================================"
-            echo "Starting Todo Application Deployment"
-            echo "======================================"
+          echo "SSM Command ID: $COMMAND_ID"
 
-            sed -i "s+^BACKEND_TAG=.*+BACKEND_TAG=${{ inputs.BACKEND_TAG }}+" /home/ubuntu/todo-deployment/.env.example
-            sed -i "s+^UI_TAG=.*+UI_TAG=${{ inputs.UI_TAG }}+" /home/ubuntu/todo-deployment/.env.example
+          echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
 
-            echo "${{ inputs.BACKEND_TAG }}"
-            echo "${{ inputs.UI_TAG }}"
+      - name: Wait for deployment
+        run: |
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id i-0ef3723e1f90886fd
 
-            echo "Making bootstrap script executable..."
-            chmod +x /home/ubuntu/start.sh
+      - name: Get deployment result
+        if: always()
+        run: |
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id i-0ef3723e1f90886fd \
+            --query '{
+              Status: Status,
+              StatusDetails: StatusDetails,
+              Output: StandardOutputContent,
+              Error: StandardErrorContent
+            }' \
+            --output json
 
-            echo "Running bootstrap script..."
-            /home/ubuntu/start.sh
+      - name: Check deployment status
+        if: always()
+        run: |
 
-            echo "Checking deployment repository..."
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id i-0ef3723e1f90886fd \
+            --query 'Status' \
+            --output text)
+
+          echo "Deployment status: $STATUS"
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "Deployment failed."
+            exit 1
+          fi
+
+          echo "Deployment successful."
