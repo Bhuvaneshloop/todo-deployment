@@ -88,7 +88,7 @@ clone_repository() {
 
         log INFO "Repository already exists."
 
-        cd "$REPO_NAME"
+        cd "/home/ubuntu/$REPO_NAME"
 
         git pull
 
@@ -96,9 +96,9 @@ clone_repository() {
 
         log INFO "Cloning deployment repository..."
 
-        git clone "$REPO_URL"
+        git clone "$REPO_URL" "/home/ubuntu/$REPO_URL"
 
-        cd "$REPO_NAME"
+        cd "/home/ubuntu/$REPO_URL"
 
     fi
 }
