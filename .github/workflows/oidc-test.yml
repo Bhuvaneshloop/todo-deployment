@@ -1,4 +1,4 @@
-name: OIDC Test
+name: GitHub OIDC to SSM
 
 on:
   workflow_dispatch:
@@ -8,22 +8,35 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Show GitHub context
+
+      # 1. See which GitHub identity is running
+      - name: Show GitHub identity
         run: |
           echo "Repository: $GITHUB_REPOSITORY"
-          echo "Ref: $GITHUB_REF"
           echo "Branch: $GITHUB_REF_NAME"
+          echo "Ref: $GITHUB_REF"
 
+      # 2. GitHub OIDC → AWS STS → Assume IAM Role
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::109684670986:role/GitHubActionsSSM
           aws-region: ap-south-1
 
+      # 3. Verify that the role was successfully assumed
       - name: Check AWS identity
         run: |
           aws sts get-caller-identity
+
+      # 4. Ask SSM to execute a command on EC2
+      - name: Send command to EC2
+        run: |
+          aws ssm send-command \
+            --instance-ids i-0ef3723e1f90886fd \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=["whoami","hostname","docker ps"]' \
+            --region ap-south-1
