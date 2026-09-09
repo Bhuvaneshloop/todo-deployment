@@ -37,7 +37,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=[
               "cd /home/ubuntu/todo-deployment",
-              "./deploy.sh"
+              "./start.sh"
             ]' \
             --query "Command.CommandId" \
             --output text)
