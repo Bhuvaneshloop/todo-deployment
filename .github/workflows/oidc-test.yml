@@ -17,14 +17,14 @@ jobs:
       - name: Checkout deployment repository
         uses: actions/checkout@v4
 
-      # 2. Authenticate GitHub Actions with AWS using OIDC
+      # 2. GitHub OIDC → AWS STS → IAM Role
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::109684670986:role/GitHubActionsSSM
           aws-region: ap-south-1
 
-      # 3. Verify which AWS identity is being used
+      # 3. Verify that GitHub successfully assumed the AWS role
       - name: Verify AWS identity
         run: |
           aws sts get-caller-identity
@@ -37,21 +37,53 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=[
               "cd /home/ubuntu/todo-deployment",
-              "./start.sh"
+              "./deploy.sh"
             ]' \
             --query "Command.CommandId" \
             --output text)
 
+          echo "COMMAND_ID=$COMMAND_ID" >> "$GITHUB_ENV"
+
           echo "SSM Command ID: $COMMAND_ID"
 
-          # Wait for the command to complete
+      # 5. Wait for SSM command to finish
+      - name: Wait for deployment
+        continue-on-error: true
+        run: |
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
             --instance-id i-0ef3723e1f90886fd
 
-      # 5. Get deployment output
+      # 6. Always get the actual SSM result
       - name: Get deployment result
+        if: always()
         run: |
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
-            --instance-id i-0ef3723e1f90886fd
+            --instance-id i-0ef3723e1f90886fd \
+            --query '{
+              Status: Status,
+              StatusDetails: StatusDetails,
+              StandardOutput: StandardOutputContent,
+              StandardError: StandardErrorContent
+            }' \
+            --output json
+
+      # 7. Fail the GitHub job if deployment failed
+      - name: Check deployment status
+        if: always()
+        run: |
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id i-0ef3723e1f90886fd \
+            --query 'Status' \
+            --output text)
+
+          echo "Deployment status: $STATUS"
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "Deployment failed."
+            exit 1
+          fi
+
+          echo "Deployment successful."
