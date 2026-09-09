@@ -17,14 +17,14 @@ jobs:
       - name: Checkout deployment repository
         uses: actions/checkout@v4
 
-      # 2. GitHub OIDC → AWS STS → IAM Role
+      # 2. GitHub OIDC → AWS STS → GitHubActionsSSM Role
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::109684670986:role/GitHubActionsSSM
           aws-region: ap-south-1
 
-      # 3. Verify that GitHub successfully assumed the AWS role
+      # 3. Verify the assumed AWS identity
       - name: Verify AWS identity
         run: |
           aws sts get-caller-identity
@@ -46,7 +46,8 @@ jobs:
 
           echo "SSM Command ID: $COMMAND_ID"
 
-      # 5. Wait for SSM command to finish
+      # 5. Wait for the SSM command
+      #    If the command fails, continue so we can retrieve the real error
       - name: Wait for deployment
         continue-on-error: true
         run: |
@@ -54,8 +55,8 @@ jobs:
             --command-id "$COMMAND_ID" \
             --instance-id i-0ef3723e1f90886fd
 
-      # 6. Always get the actual SSM result
-      - name: Get deployment result
+      # 6. Get the actual SSM execution result
+      - name: Get SSM execution result
         if: always()
         run: |
           aws ssm get-command-invocation \
@@ -64,12 +65,12 @@ jobs:
             --query '{
               Status: Status,
               StatusDetails: StatusDetails,
-              StandardOutput: StandardOutputContent,
-              StandardError: StandardErrorContent
+              Output: StandardOutputContent,
+              Error: StandardErrorContent
             }' \
             --output json
 
-      # 7. Fail the GitHub job if deployment failed
+      # 7. Fail workflow if deployment was unsuccessful
       - name: Check deployment status
         if: always()
         run: |
