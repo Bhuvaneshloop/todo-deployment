@@ -17,6 +17,10 @@ readonly LOGFILE="$HOME/init-TODO/bootstrap.log"
 readonly REPO_URL="https://github.com/Bhuvaneshloop/todo-deployment.git"
 readonly REPO_NAME="todo-deployment"
 
+# Use the provided tags, otherwise default to latest
+readonly BACKEND_TAG="${BACKEND_TAG:-latest}"
+readonly UI_TAG="${UI_TAG:-latest}"
+
 mkdir -p "$(dirname "$LOGFILE")"
 
 #######################################
@@ -45,7 +49,7 @@ install_packages() {
 
     sudo apt update
 
-    log INFO "Installing Docker..."
+    log INFO "Installing Docker, Docker Compose and Git..."
 
     sudo apt install -y docker.io docker-compose-v2 git
 
@@ -105,11 +109,14 @@ clone_repository() {
 
 prepare_env() {
 
-        cp .env.example .env
+    cp .env.example .env
 
-        log INFO ".env created."
+    sed -i "s+^BACKEND_TAG=.*+BACKEND_TAG=${BACKEND_TAG}+" .env
+    sed -i "s+^UI_TAG=.*+UI_TAG=${UI_TAG}+" .env
 
-   
+    log INFO ".env created."
+    log INFO "Backend tag: ${BACKEND_TAG}"
+    log INFO "UI tag: ${UI_TAG}"
 }
 
 #######################################
@@ -118,7 +125,7 @@ prepare_env() {
 
 deploy() {
 
-    log INFO "Pulling latest Docker images..."
+    log INFO "Pulling Docker images..."
 
     sudo docker compose pull
 
@@ -146,6 +153,7 @@ verify() {
             log INFO "$container is running."
         else
             log ERROR "$container is NOT running."
+            exit 1
         fi
     done
 }
@@ -157,6 +165,9 @@ verify() {
 main() {
 
     log INFO "Bootstrap Started."
+
+    log INFO "Backend tag: ${BACKEND_TAG}"
+    log INFO "UI tag: ${UI_TAG}"
 
     install_packages
 
