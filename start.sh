@@ -13,7 +13,7 @@ set -Eeuo pipefail
 # Global Variables
 #######################################
 
-readonly LOGFILE="$HOME/init-TODO/bootstrap.log"
+readonly LOGFILE="/home/ubuntu/init-TODO/bootstrap.log"
 readonly REPO_URL="https://github.com/Bhuvaneshloop/todo-deployment.git"
 readonly REPO_NAME="todo-deployment"
 
