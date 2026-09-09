@@ -13,31 +13,27 @@ jobs:
 
     steps:
 
-      # 1. Checkout deployment repository
       - name: Checkout deployment repository
         uses: actions/checkout@v4
 
-      # 2. GitHub OIDC → AWS STS → GitHubActionsSSM Role
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::109684670986:role/GitHubActionsSSM
           aws-region: ap-south-1
 
-      # 3. Verify the assumed AWS identity
       - name: Verify AWS identity
         run: |
           aws sts get-caller-identity
 
-      # 4. Send deployment command to EC2 through SSM
-      - name: Deploy on EC2
+      - name: Deploy on EC2 through SSM
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids i-0ef3723e1f90886fd \
             --document-name "AWS-RunShellScript" \
             --parameters 'commands=[
               "cd /home/ubuntu/todo-deployment",
-              "./start.sh"
+              "bash start.sh"
             ]' \
             --query "Command.CommandId" \
             --output text)
@@ -46,8 +42,6 @@ jobs:
 
           echo "SSM Command ID: $COMMAND_ID"
 
-      # 5. Wait for the SSM command
-      #    If the command fails, continue so we can retrieve the real error
       - name: Wait for deployment
         continue-on-error: true
         run: |
@@ -55,7 +49,6 @@ jobs:
             --command-id "$COMMAND_ID" \
             --instance-id i-0ef3723e1f90886fd
 
-      # 6. Get the actual SSM execution result
       - name: Get SSM execution result
         if: always()
         run: |
@@ -70,7 +63,6 @@ jobs:
             }' \
             --output json
 
-      # 7. Fail workflow if deployment was unsuccessful
       - name: Check deployment status
         if: always()
         run: |
