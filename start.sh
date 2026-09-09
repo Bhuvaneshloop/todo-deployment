@@ -16,6 +16,7 @@ set -Eeuo pipefail
 readonly LOGFILE="/home/ubuntu/init-TODO/bootstrap.log"
 readonly REPO_URL="https://github.com/Bhuvaneshloop/todo-deployment.git"
 readonly REPO_NAME="todo-deployment"
+readonly REPO_PATH="/home/ubuntu/${REPO_NAME}"
 
 # Use the provided tags, otherwise default to latest
 readonly BACKEND_TAG="${BACKEND_TAG:-latest}"
@@ -84,11 +85,13 @@ install_packages() {
 
 clone_repository() {
 
-    if [[ -d "$REPO_NAME" ]]; then
+    if [[ -d "$REPO_PATH" ]]; then
 
         log INFO "Repository already exists."
 
-        cd "/home/ubuntu/$REPO_NAME"
+        cd "$REPO_PATH"
+
+        log INFO "Pulling latest repository changes..."
 
         git pull
 
@@ -96,11 +99,13 @@ clone_repository() {
 
         log INFO "Cloning deployment repository..."
 
-        git clone "$REPO_URL" "/home/ubuntu/$REPO_URL"
+        git clone "$REPO_URL" "$REPO_PATH"
 
-        cd "/home/ubuntu/$REPO_URL"
+        cd "$REPO_PATH"
 
     fi
+
+    log INFO "Repository location: $(pwd)"
 }
 
 #######################################
