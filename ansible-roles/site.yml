@@ -1,9 +1,7 @@
 ---
-
 - name: Sites
-  hosts: ec2-instance
-  become: yes
+  hosts: todo_servers
+  become: true
 
   roles:
     - todo
-
