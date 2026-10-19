@@ -1,0 +1,74 @@
+name: Deploy Todo Application with Ansible
+
+on:
+  workflow_dispatch:
+    inputs:
+      BACKEND_TAG:
+        description: "Backend image tag"
+        required: true
+        default: latest
+
+      UI_TAG:
+        description: "UI image tag"
+        required: true
+        default: latest
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::109684670986:role/GitHubActionsSSM
+          aws-region: ap-south-1
+
+      - name: Install Ansible and dependencies
+        run: |
+          python3 -m pip install --user ansible boto3 botocore
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Session Manager plugin
+        run: |
+          curl -fsSL \
+            https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb \
+            -o /tmp/session-manager-plugin.deb
+          sudo dpkg -i /tmp/session-manager-plugin.deb
+
+      - name: Install Ansible collections
+        run: |
+          ansible-galaxy collection install amazon.aws community.docker
+
+      - name: Configure SSM inventory
+        working-directory: ansible-roles
+        run: |
+          cat > inventory-ssm <<'EOF'
+          [todo_servers]
+          todo ansible_connection=amazon.aws.aws_ssm ansible_aws_ssm_instance_id=i-0ef3723e1f90886fd ansible_aws_ssm_region=ap-south-1 ansible_aws_ssm_bucket_name=todo-ansible-ssm-109684670986 ansible_python_interpreter=/usr/bin/python3
+          EOF
+
+      - name: Test Ansible connection
+        working-directory: ansible-roles
+        run: |
+          ansible todo_servers \
+            -i inventory-ssm \
+            -m ansible.builtin.ping
+
+      - name: Deploy Todo application
+        working-directory: ansible-roles
+        env:
+          BACKEND_TAG: ${{ inputs.BACKEND_TAG }}
+          UI_TAG: ${{ inputs.UI_TAG }}
+        run: |
+          ansible-playbook \
+            -i inventory-ssm \
+            site.yml \
+            -e "BACKEND_TAG=$BACKEND_TAG UI_TAG=$UI_TAG"
