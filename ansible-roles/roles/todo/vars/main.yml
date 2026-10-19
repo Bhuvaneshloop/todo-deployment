@@ -1,0 +1,11 @@
+#SPDX-License-Identifier: MIT-0
+---
+# vars file for roles/todo
+
+LOGFILE: '/home/ubuntu/init-TODO/bootstrap.log'
+REPO_URL: 'https://github.com/Bhuvaneshloop/todo-deployment.git'
+REPO_NAME: 'todo-deployment'
+REPO_PATH: '/home/ubuntu/todo-deployment'
+
+# Use the provided tags, otherwise default to latest
+

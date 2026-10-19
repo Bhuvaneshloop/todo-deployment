@@ -1,0 +1,58 @@
+- name: Upgarde apt cache
+  become: true
+  apt:
+    update_cache: true
+
+- name: Install git
+  become: true
+  apt:
+    name:
+      - git
+      - docker.io
+      - docker-compose-v2
+    state: present
+
+- name: start the docker and enable
+  become: true
+  systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: printing the variables
+  debug:
+    msg:
+      -  "{{ BACKEND_TAG }}"
+
+- name: Pulling and cloning the project
+  git:
+    repo: "{{ REPO_URL }}"
+    dest: "{{ REPO_PATH }}"
+    version: main
+    update: true
+
+- name: renaming the env file name 
+  copy:
+    src: "{{ REPO_PATH }}/.env.example"
+    dest: "{{ REPO_PATH }}/.env"
+    remote_src: true
+    force: true
+
+- name: Renaming the backend tag
+  lineinfile:
+    path: "{{ REPO_PATH }}/.env"
+    regexp: "^BACKEND_TAG=.*"
+    line: "BACKEND_TAG={{ BACKEND_TAG }}"
+
+- name: Renaming the tag in frontent ui
+  lineinfile:
+    path: "{{ REPO_PATH }}/.env"
+    regexp: "^UI_TAG=.*"
+    line: "UI_TAG={{ UI_TAG }}"
+
+- name: pull and run the cont
+  community.docker.docker_compose_v2:
+    project_src: "{{ REPO_PATH }}"
+    state: present
+    pull: always
+    recreate: auto

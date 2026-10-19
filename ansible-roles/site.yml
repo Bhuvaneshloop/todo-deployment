@@ -1,0 +1,9 @@
+---
+
+- name: Sites
+  hosts: ec2-instance
+  become: yes
+
+  roles:
+    - todo
+
