@@ -31,10 +31,14 @@ jobs:
           role-to-assume: arn:aws:iam::109684670986:role/GitHubActionsSSM
           aws-region: ap-south-1
 
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
       - name: Install Ansible and dependencies
         run: |
-          python3 -m pip install --user ansible boto3 botocore
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          python3 -m venv .venv
+          .venv/bin/pip install --upgrade ansible boto3 botocore
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Install Session Manager plugin
         run: |
@@ -42,6 +46,7 @@ jobs:
             https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb \
             -o /tmp/session-manager-plugin.deb
           sudo dpkg -i /tmp/session-manager-plugin.deb
+          session-manager-plugin --version
 
       - name: Install Ansible collections
         run: |
@@ -49,10 +54,17 @@ jobs:
 
       - name: Configure SSM inventory
         working-directory: ansible-roles
+        env:
+          SSM_BUCKET: YOUR_S3_BUCKET_NAME
         run: |
-          cat > inventory-ssm <<'EOF'
+          test -n "$SSM_BUCKET" || {
+            echo "S3 bucket name is missing"
+            exit 1
+          }
+
+          cat > inventory-ssm <<EOF
           [todo_servers]
-          todo ansible_connection=amazon.aws.aws_ssm ansible_aws_ssm_instance_id=i-0ef3723e1f90886fd ansible_aws_ssm_region=ap-south-1 ansible_aws_ssm_bucket_name=todo-ansible-ssm-109684670986 ansible_python_interpreter=/usr/bin/python3
+          todo ansible_connection=amazon.aws.aws_ssm ansible_aws_ssm_instance_id=i-0ef3723e1f90886fd ansible_aws_ssm_region=ap-south-1 ansible_aws_ssm_bucket_name=${SSM_BUCKET} ansible_aws_ssm_timeout=120 ansible_python_interpreter=/usr/bin/python3
           EOF
 
       - name: Test Ansible connection
@@ -60,7 +72,8 @@ jobs:
         run: |
           ansible todo_servers \
             -i inventory-ssm \
-            -m ansible.builtin.ping
+            -m ansible.builtin.ping \
+            -vv
 
       - name: Deploy Todo application
         working-directory: ansible-roles
