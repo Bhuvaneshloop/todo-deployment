@@ -52,7 +52,7 @@ jobs:
       - name: Configure SSM inventory
         working-directory: ansible-roles
         env:
-          SSM_BUCKET: YOUR_S3_BUCKET_NAME
+          SSM_BUCKET: todo-ansible-ssm-109684670986
         run: |
           test -n "$SSM_BUCKET" || {
             echo "S3 bucket name is missing"
