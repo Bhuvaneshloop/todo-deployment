@@ -68,10 +68,11 @@ jobs:
         working-directory: ansible-roles
         run: |
           ansible todo_servers \
-            -i inventory-ssm \
-            -m ansible.builtin.ping \
-            -vv
-
+             -i inventory-ssm \
+             -m ansible.builtin.command \
+             -a "id" \
+             -vvv
+            
       - name: Deploy Todo application
         working-directory: ansible-roles
         env:
