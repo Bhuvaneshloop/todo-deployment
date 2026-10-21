@@ -88,6 +88,7 @@ jobs:
 
       - name: Test 2 - sudo + simple command
         continue-on-error: true
+        timeout-minutes: 3
         working-directory: ansible-roles
         run: |
           start=$(date +%s)
