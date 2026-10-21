@@ -68,7 +68,11 @@ jobs:
             --filters "Key=InstanceIds,Values=i-0ef3723e1f90886fd" \
             --query "InstanceInformationList[].{InstanceId:InstanceId,PingStatus:PingStatus}" \
             --output table
-
+      - name: Check Ansible and AWS SDK versions
+        run: |
+             python -m pip show ansible-core boto3 botocore
+             ansible-galaxy collection list amazon.aws
+             ansible-doc -t connection amazon.aws.aws_ssm | head -40
       # 7. Configure Ansible SSM inventory
       - name: Configure SSM inventory
         working-directory: ansible-roles
