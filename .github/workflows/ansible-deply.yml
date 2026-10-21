@@ -81,17 +81,16 @@ jobs:
           EOF
 
       # 8. Test Ansible connection before deployment
-      - name: Diagnose Ansible remote execution
+      - name: Diagnose Ansible apt module
         working-directory: ansible-roles
         timeout-minutes: 5
         run: |
-          echo "=== Test 1: Ansible command module ==="
           ansible todo_servers \
             -i inventory-ssm \
-            -m ansible.builtin.command \
-            -a "id" \
+            --become \
+            -m ansible.builtin.apt \
+            -a "update_cache=false" \
             -vvvv
-
           echo "=== Test 2: Remote Python execution ==="
           ansible todo_servers \
             -i inventory-ssm \
