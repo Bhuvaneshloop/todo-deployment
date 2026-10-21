@@ -1,3 +1,4 @@
+
 name: Deploy Todo Application with Ansible
 
 on:
@@ -51,7 +52,7 @@ jobs:
           sudo dpkg -i /tmp/session-manager-plugin.deb
           session-manager-plugin --version
 
-      # 5. Install a pinned AWS collection and Docker collection
+      # 5. Install Ansible collections
       - name: Install Ansible collections
         run: |
           ansible-galaxy collection install amazon.aws:10.1.2 community.docker
@@ -74,7 +75,6 @@ jobs:
         run: |
           python -m pip show ansible-core boto3 botocore
           ansible-galaxy collection list amazon.aws
-          ansible-doc -t connection amazon.aws.aws_ssm | head -40
 
       # 8. Configure Ansible SSM inventory
       - name: Configure SSM inventory
@@ -87,30 +87,20 @@ jobs:
           todo ansible_connection=amazon.aws.aws_ssm ansible_aws_ssm_instance_id=i-0ef3723e1f90886fd ansible_aws_ssm_region=ap-south-1 ansible_aws_ssm_bucket_name=${SSM_BUCKET} ansible_aws_ssm_timeout=600 ansible_python_interpreter=/usr/bin/python3
           EOF
 
-      # 9. Test basic command execution first
-      - name: Diagnose Ansible SSM connection
+      # 9. Test SSM command completion without an Ansible module
+      - name: Diagnose SSM command completion
         working-directory: ansible-roles
         timeout-minutes: 3
         run: |
+          set -o pipefail
+
           ansible todo_servers \
             -i inventory-ssm \
-            -m ansible.builtin.command \
-            -a "id" \
+            -m ansible.builtin.raw \
+            -a "echo RAW_START; /usr/bin/python3 -c 'print(\"PYTHON_DONE\")'; echo RAW_EXIT=\$?" \
             -vvvv
 
-      # 10. Test the apt module separately
-      - name: Diagnose Ansible apt module
-        working-directory: ansible-roles
-        timeout-minutes: 5
-        run: |
-          ansible todo_servers \
-            -i inventory-ssm \
-            --become \
-            -m ansible.builtin.apt \
-            -a "update_cache=false" \
-            -vvvv
-
-      # 11. Deploy Todo application only if diagnostics pass
+      # 10. Deploy only if the diagnostic succeeds
       - name: Deploy Todo application
         working-directory: ansible-roles
         env:
@@ -127,7 +117,7 @@ jobs:
             -e "BACKEND_TAG=$BACKEND_TAG UI_TAG=$UI_TAG" \
             -vvvv 2>&1 | tee "$ANSIBLE_LOG_PATH"
 
-      # 12. Upload deployment log
+      # 11. Upload Ansible debug log
       - name: Upload Ansible debug log
         if: always()
         uses: actions/upload-artifact@v4
