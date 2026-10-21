@@ -90,8 +90,6 @@ jobs:
             -m ansible.builtin.command \
             -a "id" \
             -vv
-
-      # 9. Deploy the application
       - name: Deploy Todo application
         working-directory: ansible-roles
         env:
@@ -116,4 +114,5 @@ jobs:
           path: ${{ runner.temp }}/ansible-deploy.log
           if-no-files-found: warn
           retention-days: 3
+
 
