@@ -97,9 +97,23 @@ jobs:
         env:
           BACKEND_TAG: ${{ inputs.BACKEND_TAG }}
           UI_TAG: ${{ inputs.UI_TAG }}
+          ANSIBLE_LOG_PATH: ${{ runner.temp }}/ansible-deploy.log
+        timeout-minutes: 12
         run: |
+          set -o pipefail
+
           ansible-playbook \
             -i inventory-ssm \
             site.yml \
             -e "BACKEND_TAG=$BACKEND_TAG UI_TAG=$UI_TAG" \
-            -v
+            -vvvv 2>&1 | tee "$ANSIBLE_LOG_PATH"
+
+      - name: Upload Ansible debug log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ansible-debug-log
+          path: ${{ runner.temp }}/ansible-deploy.log
+          if-no-files-found: warn
+          retention-days: 3
+
