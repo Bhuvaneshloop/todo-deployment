@@ -99,6 +99,7 @@ jobs:
 
       - name: Test 3 - sudo + apt-get update via command module
         continue-on-error: true
+        timeout-minutes: 3
         working-directory: ansible-roles
         run: |
           start=$(date +%s)
@@ -109,6 +110,7 @@ jobs:
 
       - name: Test 4 - sudo + apt module
         continue-on-error: true
+        timeout-minutes: 3
         working-directory: ansible-roles
         run: |
           start=$(date +%s)
