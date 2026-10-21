@@ -20,6 +20,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -49,6 +50,14 @@ jobs:
         run: |
           ansible-galaxy collection install amazon.aws community.docker
 
+      # Shows exactly which versions this run used.
+      # Once you find a working combination, pin these versions.
+      - name: Print tool versions
+        run: |
+          ansible --version
+          ansible-galaxy collection list | grep -E "amazon.aws|community.docker" || true
+          .venv/bin/pip list 2>/dev/null | grep -E "^(boto3|botocore|ansible) " || true
+
       - name: Configure SSM inventory
         working-directory: ansible-roles
         env:
@@ -61,18 +70,73 @@ jobs:
 
           cat > inventory-ssm <<EOF
           [todo_servers]
-          todo ansible_connection=amazon.aws.aws_ssm ansible_aws_ssm_instance_id=i-0ef3723e1f90886fd ansible_aws_ssm_region=ap-south-1 ansible_aws_ssm_bucket_name=${SSM_BUCKET} ansible_aws_ssm_timeout=300 ansible_python_interpreter=/usr/bin/python3
+          todo ansible_connection=amazon.aws.aws_ssm ansible_aws_ssm_instance_id=i-0ef3723e1f90886fd ansible_aws_ssm_region=ap-south-1 ansible_aws_ssm_bucket_name=${SSM_BUCKET} ansible_aws_ssm_timeout=600 ansible_python_interpreter=/usr/bin/python3
           EOF
 
-      - name: Test Ansible connection
+      # ---------- Isolation tests (temporary, remove when fixed) ----------
+      # continue-on-error lets all tests run so you can compare results.
+
+      - name: Test 1 - connection without sudo
+        continue-on-error: true
         working-directory: ansible-roles
         run: |
-          ansible todo_servers \
-             -i inventory-ssm \
-             -m ansible.builtin.command \
-             -a "id" \
-             -vvv
-            
+          start=$(date +%s)
+          ansible todo_servers -i inventory-ssm \
+            -m ansible.builtin.command -a "id" -vv || rc=$?
+          echo "Test 1 took $(( $(date +%s) - start ))s"
+          exit ${rc:-0}
+
+      - name: Test 2 - sudo + simple command
+        continue-on-error: true
+        working-directory: ansible-roles
+        run: |
+          start=$(date +%s)
+          ansible todo_servers -i inventory-ssm --become \
+            -m ansible.builtin.command -a "id" -vv || rc=$?
+          echo "Test 2 took $(( $(date +%s) - start ))s"
+          exit ${rc:-0}
+
+      - name: Test 3 - sudo + apt-get update via command module
+        continue-on-error: true
+        working-directory: ansible-roles
+        run: |
+          start=$(date +%s)
+          ansible todo_servers -i inventory-ssm --become \
+            -m ansible.builtin.command -a "apt-get update" -vv || rc=$?
+          echo "Test 3 took $(( $(date +%s) - start ))s"
+          exit ${rc:-0}
+
+      - name: Test 4 - sudo + apt module
+        continue-on-error: true
+        working-directory: ansible-roles
+        run: |
+          start=$(date +%s)
+          ansible todo_servers -i inventory-ssm --become \
+            -m ansible.builtin.apt -a "update_cache=yes lock_timeout=120" \
+            -e "ansible_python_interpreter=/usr/bin/python3" -vv || rc=$?
+          echo "Test 4 took $(( $(date +%s) - start ))s"
+          exit ${rc:-0}
+
+      # Bypasses Ansible completely: plain SSM Run Command through the AWS CLI.
+      # If this is fast and Ansible is not, the problem is the aws_ssm plugin.
+      # Needs ssm:SendCommand / ssm:GetCommandInvocation on the GitHubActionsSSM role.
+      - name: Test 5 - plain SSM Run Command (no Ansible)
+        continue-on-error: true
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids i-0ef3723e1f90886fd \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=["date","sudo apt-get update 2>&1 | tail -n 5","date"]' \
+            --query "Command.CommandId" --output text)
+          echo "CommandId: $CMD_ID"
+          aws ssm wait command-executed \
+            --command-id "$CMD_ID" --instance-id i-0ef3723e1f90886fd || true
+          aws ssm get-command-invocation \
+            --command-id "$CMD_ID" --instance-id i-0ef3723e1f90886fd \
+            --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" \
+            --output json
+      # ---------- End of isolation tests ----------
+
       - name: Deploy Todo application
         working-directory: ansible-roles
         env:
@@ -82,4 +146,5 @@ jobs:
           ansible-playbook \
             -i inventory-ssm \
             site.yml \
-            -e "BACKEND_TAG=$BACKEND_TAG UI_TAG=$UI_TAG"
+            -e "BACKEND_TAG=$BACKEND_TAG UI_TAG=$UI_TAG" \
+            -v
