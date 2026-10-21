@@ -81,15 +81,23 @@ jobs:
           EOF
 
       # 8. Test Ansible connection before deployment
-      - name: Test Ansible SSM connection
+      - name: Diagnose Ansible remote execution
         working-directory: ansible-roles
         timeout-minutes: 5
         run: |
+          echo "=== Test 1: Ansible command module ==="
           ansible todo_servers \
             -i inventory-ssm \
             -m ansible.builtin.command \
             -a "id" \
-            -vv
+            -vvvv
+
+          echo "=== Test 2: Remote Python execution ==="
+          ansible todo_servers \
+            -i inventory-ssm \
+            -m ansible.builtin.command \
+            -a "/usr/bin/python3 --version" \
+            -vvvv
       - name: Deploy Todo application
         working-directory: ansible-roles
         env:
