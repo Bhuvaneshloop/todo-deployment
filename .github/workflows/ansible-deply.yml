@@ -1,128 +1,68 @@
 
-name: Deploy Todo Application with Ansible
+name: Deploy Todo App using Ansible SSH
 
 on:
   workflow_dispatch:
-    inputs:
-      BACKEND_TAG:
-        description: "Backend image tag"
-        required: true
-        default: latest
-
-      UI_TAG:
-        description: "UI image tag"
-        required: true
-        default: latest
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
-      # 1. Checkout deployment repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Configure AWS credentials using GitHub OIDC
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure SSH key
+        env:
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/todo-ec2.pem
+          chmod 600 ~/.ssh/todo-ec2.pem
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          role-to-assume: arn:aws:iam::109684670986:role/GitHubActionsSSM
-          aws-region: ap-south-1
+          python-version: '3.12'
 
-      # 3. Install Ansible and AWS dependencies
-      - name: Install Ansible and dependencies
+      - name: Install Ansible and collections
         run: |
-          python3 -m venv .venv
-          .venv/bin/pip install --upgrade ansible boto3 botocore
-          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+          python -m pip install --upgrade pip
+          python -m pip install ansible
+          ansible-galaxy collection install community.docker
 
-      # 4. Install AWS Session Manager plugin
-      - name: Install Session Manager plugin
-        run: |
-          curl -fsSL \
-            https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb \
-            -o /tmp/session-manager-plugin.deb
-
-          sudo dpkg -i /tmp/session-manager-plugin.deb
-          session-manager-plugin --version
-
-      # 5. Install Ansible collections
-      - name: Install Ansible collections
-        run: |
-          ansible-galaxy collection install amazon.aws:10.1.2 community.docker
-
-      # 6. Verify AWS identity and EC2 SSM status
-      - name: Verify AWS and EC2 SSM status
+      - name: Create SSH inventory
         env:
-          AWS_PAGER: ""
-        run: |
-          aws sts get-caller-identity
-
-          aws ssm describe-instance-information \
-            --region ap-south-1 \
-            --filters "Key=InstanceIds,Values=i-0ef3723e1f90886fd" \
-            --query "InstanceInformationList[].{InstanceId:InstanceId,PingStatus:PingStatus}" \
-            --output table
-
-      # 7. Verify runner-side versions
-      - name: Check Ansible and AWS SDK versions
-        run: |
-          python -m pip show ansible-core boto3 botocore
-          ansible-galaxy collection list amazon.aws
-
-      # 8. Configure Ansible SSM inventory
-      - name: Configure SSM inventory
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
         working-directory: ansible-roles
-        env:
-          SSM_BUCKET: todo-ansible-ssm-109684670986
         run: |
-          cat > inventory-ssm <<EOF
+          cat > inventory-ssh <<EOF
           [todo_servers]
-          todo ansible_connection=amazon.aws.aws_ssm ansible_aws_ssm_instance_id=i-0ef3723e1f90886fd ansible_aws_ssm_region=ap-south-1 ansible_aws_ssm_bucket_name=${SSM_BUCKET} ansible_aws_ssm_timeout=600 ansible_python_interpreter=/usr/bin/python3
+          todo ansible_host=${EC2_HOST} ansible_user=${EC2_USER} ansible_ssh_private_key_file=$HOME/.ssh/todo-ec2.pem ansible_python_interpreter=/usr/bin/python3 ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new -o ConnectTimeout=15'
           EOF
 
-      # 9. Test SSM command completion without an Ansible module
-      - name: Diagnose SSM command completion
-        working-directory: ansible-roles
-        timeout-minutes: 3
-        run: |
-          set -o pipefail
+          cat inventory-ssh
 
+      - name: Test SSH connectivity
+        working-directory: ansible-roles
+        run: |
           ansible todo_servers \
-            -i inventory-ssm \
-            -m ansible.builtin.raw \
-            -a "echo RAW_START; /usr/bin/python3 -c 'print(\"PYTHON_DONE\")'; echo RAW_EXIT=\$?" \
+            -i inventory-ssh \
+            -m ansible.builtin.ping \
             -vvvv
 
-      # 10. Deploy only if the diagnostic succeeds
-      - name: Deploy Todo application
+      - name: Deploy Todo App
         working-directory: ansible-roles
-        env:
-          BACKEND_TAG: ${{ inputs.BACKEND_TAG }}
-          UI_TAG: ${{ inputs.UI_TAG }}
-          ANSIBLE_LOG_PATH: ${{ runner.temp }}/ansible-deploy.log
-        timeout-minutes: 12
         run: |
-          set -o pipefail
-
           ansible-playbook \
-            -i inventory-ssm \
+            -i inventory-ssh \
             site.yml \
-            -e "BACKEND_TAG=$BACKEND_TAG UI_TAG=$UI_TAG" \
-            -vvvv 2>&1 | tee "$ANSIBLE_LOG_PATH"
-
-      # 11. Upload Ansible debug log
-      - name: Upload Ansible debug log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ansible-debug-log
-          path: ${{ runner.temp }}/ansible-deploy.log
-          if-no-files-found: warn
-          retention-days: 3
+            --become \
+            -vvvv
